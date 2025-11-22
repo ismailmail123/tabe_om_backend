@@ -1,0 +1,13 @@
+node_modules
+.env
+
+# Session dan cache WhatsApp
+.wwebjs_cache/
+whatsapp-sessions/
+
+
+# File log dan lainnya
+*.log
+node_modules/
+.DS_Store
+baileys_auth_info/
