@@ -16,7 +16,7 @@ router.get("/", validateToken, index);
 router.get("/:id", validateToken, show);
 router.post("/", validateToken, create);
 router.delete("/delete", validateToken, remove);
-router.put("/:variantId", validateToken, update);
+router.put("/:id", validateToken, update);
 
 
 module.exports = router;

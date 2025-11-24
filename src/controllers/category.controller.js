@@ -11,6 +11,7 @@ const { where } = require("sequelize");
 const index = async(req, res, _next) => {
     try {
         let categories = await CategoryModel.findAll({
+            where: { is_delete: false },
             include: [{
                 model: ProductModel,
                 as: "product",
@@ -43,7 +44,7 @@ const show = async(req, res, next) => {
             }],
         });
 
-        if (!variant) {
+        if (!category) {
             return res.status(404).send({
                 message: "Category tidak ditemukan",
                 data: null
@@ -119,8 +120,9 @@ const create = async(req, res, _next) => {
 const update = async(req, res, _next) => {
     try {
         const currentUser = req.user;
-        const { categoryId } = req.params;
-        const { product_id, name, slug, description } = req.body;
+        const { id } = req.params;
+        const { name, slug, description } = req.body;
+
 
         // Memvalidasi inputan dari user
         if (!name || !slug || !description) {
@@ -128,7 +130,7 @@ const update = async(req, res, _next) => {
         }
 
         // Memastikan productId tidak undefined
-        if (!categoryId) {
+        if (!id) {
             return res.status(400).send({ message: "category ID tidak ditemukan" });
         }
 
@@ -138,10 +140,9 @@ const update = async(req, res, _next) => {
         }
 
         // Memastikan produk milik admin yang sedang login
-        const category = await VariantModel.findOne({
+        const category = await CategoryModel.findOne({
             where: {
-                id: categoryId,
-                product_id: product_id,
+                id: id,
             },
         });
 
@@ -154,19 +155,9 @@ const update = async(req, res, _next) => {
             return res.status(404).send({ message: "Category tidak ditemukan" });
         }
 
-        const product = await ProductModel.findOne({
-            where: { id: product_id }
-        });
-
-
-        if (!product) {
-            return res.status(404).send({ message: "Produk tidak ditemukan" });
-        }
-
 
         // Update produk
         const updatedCategory = await category.update({
-            product_id,
             name,
             slug,
             description
