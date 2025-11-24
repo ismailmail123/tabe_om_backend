@@ -8,6 +8,7 @@ const {
     order_historie: HistoryModel,
     order_data: OrderDataModel
 } = require("../models");
+const { sequelize } = require('../models');
 
 /**
  * @param {import("express").Request} req
@@ -91,6 +92,7 @@ const index = async(req, res, next) => {
                     status: order.status,
                     payment_method: order.payment_method,
                     payment_status: order.payment_status,
+                    purchase_receipt_photo: order.purchase_receipt_photo,
                     created_at: order.createdAt,
                     user: order.user,
                     items: order.orderitem.map((item) => {
@@ -364,6 +366,150 @@ const getOrderById = async(req, res, next) => {
     }
 };
 
+const updateStatus = async(req, res, next) => {
+    const { orderId } = req.params;
+    const { status, note } = req.body;
+    const currentUser = req.user;
+
+    // Validasi input
+    if (!orderId) {
+        return res.status(400).send({ message: "Order ID is required" });
+    }
+
+    if (!status) {
+        return res.status(400).send({ message: "Status is required" });
+    }
+
+    try {
+        // Gunakan transaction dengan auto-commit/rollback
+        const result = await sequelize.transaction(async(transaction) => {
+            // 1. Cari order berdasarkan orderId
+            const order = await OrderModel.findByPk(orderId, {
+                include: [{
+                        model: UserModel,
+                        as: "user",
+                    },
+                    {
+                        model: PaymentModel,
+                        as: "payment",
+                    },
+                    {
+                        model: HistoryModel,
+                        as: "order_historie", // <- UBAH DI SINI: "order" menjadi "order_historie"
+                    },
+                    {
+                        model: OrderItemModel,
+                        as: "orderitem",
+                        include: [{
+                            model: VariantModel,
+                            as: "variant",
+                            include: [{
+                                model: ProductModel,
+                                as: "product",
+                                include: [{
+                                    model: UserModel,
+                                    as: "user",
+                                }]
+                            }]
+                        }],
+                    },
+                ],
+                transaction
+            });
+
+            if (!order) {
+                throw new Error("Order not found");
+            }
+
+            // 2. Cek jika order sudah dibatalkan
+            if (order.status === "cancelled") {
+                throw new Error("Order has been cancelled");
+            }
+
+            // 3. Validasi status yang diizinkan
+            const allowedStatuses = ['pending', 'processing', 'shipped', 'delivered', 'completed', 'cancelled'];
+            if (!allowedStatuses.includes(status)) {
+                throw new Error("Invalid status value");
+            }
+
+            // 4. Siapkan data untuk diupdate
+            const updateData = { status };
+
+            // Jika purchase_receipt_photo diupload, tambahkan ke updateData
+            if (req.files && req.files.purchase_receipt_photo) {
+                updateData.purchase_receipt_photo = req.files.purchase_receipt_photo[0].path;
+            }
+
+            // Jika delivery_receipt_photo diupload, tambahkan ke updateData
+            if (req.files && req.files.delivery_receipt_photo) {
+                updateData.delivery_receipt_photo = req.files.delivery_receipt_photo[0].path;
+            }
+
+            // 5. Update status order dan path foto (jika ada)
+            const [affectedRows] = await OrderModel.update(
+                updateData, {
+                    where: { id: orderId },
+                    transaction
+                }
+            );
+
+            // Cek jika update berhasil
+            if (affectedRows === 0) {
+                throw new Error("Failed to update order status");
+            }
+
+            // 6. Simpan history perubahan status
+            await HistoryModel.create({
+                order_id: orderId,
+                user_id: currentUser.id,
+                status,
+                note: note || `Order status changed to ${status}`,
+            }, { transaction });
+
+            // Return data untuk response - juga perbaiki di sini
+            const updatedOrder = await OrderModel.findByPk(orderId, {
+                include: [{
+                    model: HistoryModel,
+                    as: "order_historie" // <- UBAH DI SINI JUGA
+                }]
+            });
+
+            return updatedOrder;
+        });
+
+        return res.send({
+            message: "Order status updated successfully",
+            data: result
+        });
+
+    } catch (error) {
+        console.error("Error updating order status:", error);
+
+        // Handle specific errors
+        if (error.message === "Order not found") {
+            return res.status(404).send({ message: error.message });
+        }
+        if (error.message === "Order has been cancelled") {
+            return res.status(403).send({ message: error.message });
+        }
+        if (error.message === "Invalid status value") {
+            return res.status(400).send({ message: error.message });
+        }
+        if (error.message === "Failed to update order status") {
+            return res.status(500).send({ message: error.message });
+        }
+
+        // Handle Sequelize validation errors
+        if (error.name === 'SequelizeValidationError') {
+            return res.status(400).send({
+                message: "Validation error",
+                errors: error.errors
+            });
+        }
+
+        next(error);
+    }
+};
 
 const cancelOrder = async(req, res, next) => {
     const { orderId } = req.params;
@@ -411,4 +557,4 @@ const cancelOrder = async(req, res, next) => {
 
 
 
-module.exports = { index, create, getOrderById, cancelOrder };
+module.exports = { index, create, getOrderById, cancelOrder, updateStatus };

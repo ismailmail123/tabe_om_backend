@@ -215,6 +215,19 @@ const checkAuth = (req, res) => {
         res.status(500).json({ message: "Internal Server Error" });
     }
 };
+const logoutUser = async(req, res) => {
+    try {
+        // Jika Anda ingin menambahkan logika tambahan, seperti menandai pengguna sebagai "offline" di database:
+        // const userId = req.user.id; // Ambil ID pengguna dari token (jika menggunakan middleware auth)
+        // await UserModel.update({ status: 'offline' }, { where: { id: userId } });
+
+        // Kirim respons berhasil logout
+        return res.status(200).json({ message: "Successfully logged out." });
+    } catch (err) {
+        console.error("Error during logout:", err); // Untuk mempermudah debugging
+        return res.status(500).json({ message: "Internal Server Error" });
+    }
+};
 
 module.exports = {
     login,
