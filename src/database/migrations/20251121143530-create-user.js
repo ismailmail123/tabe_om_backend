@@ -57,6 +57,10 @@ module.exports = {
                 type: Sequelize.ENUM("aktif", "tidak aktif"),
                 defaultValue: "tidak aktif"
             },
+            is_delete: {
+                type: Sequelize.BOOLEAN,
+                defaultValue: false
+            },
             created_at: {
                 allowNull: false,
                 defaultValue: Sequelize.fn("NOW"),

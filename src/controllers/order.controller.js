@@ -226,7 +226,7 @@ const create = async(req, res, next) => {
 
         await OrderModel.update({
             total_price: totalPrice,
-            status: "process",
+            status: "pending",
         }, {
             where: { id: newOrder.id },
         });

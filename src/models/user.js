@@ -16,6 +16,10 @@ module.exports = (sequelize, DataTypes) => {
                 foreignKey: "user_id",
                 as: "product"
             })
+            user.hasMany(models.order, {
+                foreignKey: "user_id",
+                as: "orders"
+            })
             user.hasMany(models.cart, {
                 foreignKey: "user_id",
                 as: "cart"
@@ -37,7 +41,8 @@ module.exports = (sequelize, DataTypes) => {
         kode_verifikasi: DataTypes.STRING,
         terverifikasi: DataTypes.BOOLEAN,
         nama_perangkat: DataTypes.STRING,
-        status: DataTypes.ENUM("aktif", "tidak aktif")
+        status: DataTypes.ENUM("aktif", "tidak aktif"),
+        is_delete: DataTypes.BOOLEAN,
     }, {
         sequelize,
         modelName: 'user',
