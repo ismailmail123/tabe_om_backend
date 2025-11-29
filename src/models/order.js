@@ -37,7 +37,7 @@ module.exports = (sequelize, DataTypes) => {
         user_id: DataTypes.INTEGER,
         status: DataTypes.ENUM('pending', 'process', 'cancelled', 'completed'),
         total_price: DataTypes.DECIMAL,
-        payment_method: DataTypes.ENUM('COD', 'transfer'),
+        payment_method: DataTypes.ENUM('COD', 'transfer', 'virtual_account', 'qris'),
         payment_status: DataTypes.ENUM('pending', 'process', 'cancelled', 'completed'),
         order_code: DataTypes.INTEGER,
         order_date: DataTypes.DATE,

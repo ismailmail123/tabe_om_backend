@@ -33,14 +33,60 @@ const isStoreOpen = (openTime, closeTime, currentTime) => {
     }
 };
 
+// const index = async(req, res, _next) => {
+//     try {
+
+//         // Ambil semua produk dengan toko terlebih dahulu
+//         const products = await ProductModel.findAll({
+//             where: {
+//                 is_delete: false
+//             },
+//             include: [{
+//                     model: UserModel,
+//                     as: "user",
+//                     attributes: { exclude: ['password', 'terverifikasi'] },
+//                     required: true,
+//                 },
+//                 {
+//                     model: CategoryModel,
+//                     as: "category",
+//                 },
+//                 {
+//                     model: VariantModel,
+//                     as: "variant",
+//                 }
+//             ],
+//         });
+
+//         return res.send({
+//             message: "Success",
+//             data: products
+//         });
+//     } catch (error) {
+//         console.error("Error:", error);
+//         return res.status(500).send({
+//             message: "Internal Server Error",
+//             error: error.message
+//         });
+//     }
+// };
 const index = async(req, res, _next) => {
     try {
+        const userRole = req.user.role; // Asumsi data user ada di req.user setelah authentication
+
+        // Base where condition
+        const whereCondition = {
+            is_delete: false
+        };
+
+        // Tambahkan filter availability untuk non-admin
+        if (userRole !== 'admin') {
+            whereCondition.availability = true;
+        }
 
         // Ambil semua produk dengan toko terlebih dahulu
         const products = await ProductModel.findAll({
-            where: {
-                is_delete: false
-            },
+            where: whereCondition,
             include: [{
                     model: UserModel,
                     as: "user",
@@ -54,13 +100,23 @@ const index = async(req, res, _next) => {
                 {
                     model: VariantModel,
                     as: "variant",
+                    where: { is_delete: false }, // Filter variant yang tidak dihapus
+                    required: false, // LEFT JOIN untuk variant
                 }
             ],
         });
 
+        // Handle variant yang kosong
+        const productsWithVariant = products.map(product => {
+            if (!product.variant) {
+                product.variant = [];
+            }
+            return product;
+        });
+
         return res.send({
             message: "Success",
-            data: products
+            data: productsWithVariant
         });
     } catch (error) {
         console.error("Error:", error);
@@ -70,7 +126,6 @@ const index = async(req, res, _next) => {
         });
     }
 };
-
 
 /**
  * @param {import("express").Request} req
@@ -85,8 +140,9 @@ const show = async(req, res, next) => {
         const product = await ProductModel.findByPk(id, {
             include: [{
                     model: VariantModel,
-                    where: { is_delete: false }, // Hanya ambil variant yang tidak dihapus
+                    where: { is_delete: false },
                     as: "variant",
+                    required: false, // Tambahkan ini untuk LEFT JOIN
                 },
                 {
                     model: CategoryModel,
@@ -98,7 +154,6 @@ const show = async(req, res, next) => {
                     attributes: { exclude: ['password', 'terverifikasi'] },
                 }
             ]
-
         });
 
         if (!product) {
@@ -106,6 +161,11 @@ const show = async(req, res, next) => {
                 message: "product tidak ditemukan",
                 data: null
             })
+        }
+
+        // Jika variant null atau tidak ada, set menjadi array kosong
+        if (!product.variant) {
+            product.variant = [];
         }
 
         return res.send({

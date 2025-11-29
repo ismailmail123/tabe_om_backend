@@ -82,7 +82,7 @@ const show = async(req, res, next) => {
         }
 
         const user = await UserModel.findByPk(id, {
-            attributes: { exclude: ['password', 'terverifikasi', 'kode_verifikasi', 'nama_perangkat'] },
+            attributes: { exclude: ['password', 'kode_verifikasi', 'nama_perangkat'] },
             include: [{
                 model: OrderModel,
                 as: "orders",

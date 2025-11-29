@@ -41,6 +41,9 @@ module.exports = {
             tempat_lahir: {
                 type: Sequelize.STRING
             },
+            refresh_token: {
+                type: Sequelize.TEXT
+            },
             tanggal_lahir: {
                 type: Sequelize.DATE
             },

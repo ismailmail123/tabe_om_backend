@@ -383,25 +383,6 @@ const handleMidtransNotification = async(req, res) => {
             }, { transaction });
 
 
-            const user = await UserModel.findOne({
-                where: { role: 'admin' }
-            });
-
-            console.log("ini user adminnnn", user)
-
-            const remaining_balance = user.admin_wallet ? parseFloat(user.admin_wallet.balance) + parseFloat(payment.amount) : payment.amount;
-
-            // Buat wallet transaction history
-            await WalletTransactionAdminModel.create({
-                wallet_id: 1, // Asumsikan wallet admin ID 1
-                type: 'credit',
-                amount: payment.amount, // Simpan total amount untuk credit
-                remaining_balance,
-                description: `Terima transfer dari order #${payment.order_id}`,
-                status: "success",
-                user_id: user.id
-            }, { transaction });
-
 
             // Kurangi stok produk
             const orderItems = await OrderItemModel.findAll({

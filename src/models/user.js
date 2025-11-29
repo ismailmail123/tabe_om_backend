@@ -38,6 +38,7 @@ module.exports = (sequelize, DataTypes) => {
         jenis_kelamin: DataTypes.ENUM("laki-laki", "perempuan"),
         tempat_lahir: DataTypes.STRING,
         tanggal_lahir: DataTypes.DATE,
+        refresh_token: DataTypes.TEXT,
         kode_verifikasi: DataTypes.STRING,
         terverifikasi: DataTypes.BOOLEAN,
         nama_perangkat: DataTypes.STRING,

@@ -19,7 +19,7 @@ module.exports = {
                 type: Sequelize.STRING
             },
             payment_method: {
-                type: Sequelize.ENUM('COD', 'transfer'),
+                type: Sequelize.ENUM('COD', 'transfer', 'virtual_account', 'qris'),
                 defaultValue: 'transfer'
             },
             amount: {

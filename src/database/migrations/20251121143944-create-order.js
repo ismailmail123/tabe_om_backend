@@ -20,7 +20,7 @@ module.exports = {
                 type: Sequelize.DECIMAL(10, 2)
             },
             payment_method: {
-                type: Sequelize.ENUM('COD', 'transfer'),
+                type: Sequelize.ENUM('COD', 'transfer', 'virtual_account', 'qris'),
                 defaultValue: 'transfer'
             },
             payment_status: {
