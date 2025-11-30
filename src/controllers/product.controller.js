@@ -191,8 +191,6 @@ const create = async(req, res, _next) => {
         const currentUser = req.user;
         const { category_id, name, description, img_url, price } = req.body;
 
-        console.log("rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrreq.file", req.file);
-        console.log("rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrreq.body", req.body);
 
         if (!req.file) {
             return res.status(400).send({ message: "Gambar tidak ditemukan, pastikan gambar diunggah dengan benar" });

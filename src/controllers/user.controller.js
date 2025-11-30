@@ -19,21 +19,21 @@ const { exec } = require("child_process");
 
 const indexUser = async(req, res, next) => {
     try {
-        // Cek apakah user yang sedang login adalah admin
-        if (req.user.role !== "admin") {
-            return res.status(403).send({
-                message: "Forbidden: You are not allowed to access this resource.",
-            });
-        }
+        let whereCondition = {
+            id: {
+                [Op.ne]: req.user.id
+            } // Exclude current user
+        };
 
-        // Pertama ambil semua user dengan data dasar
+        // Jika bukan admin, hanya tampilkan user yang tidak di-delete
+        if (req.user.role !== "admin") {
+            whereCondition.is_delete = false;
+        }
+        // Jika admin, tampilkan semua user (tidak ada kondisi is_delete)
+
+        // Ambil semua user dengan data dasar
         const users = await UserModel.findAll({
-            where: {
-                is_delete: false,
-                id: {
-                    [Op.ne]: req.user.id
-                } // Exclude current user
-            },
+            where: whereCondition,
             include: [{
                 model: OrderModel,
                 as: "orders",
@@ -48,10 +48,8 @@ const indexUser = async(req, res, next) => {
                         as: "order_data"
                     },
                 ],
-
-            }, ],
-        }, {
-            attributes: { execlude: ['password', "terverifikasi", ] }
+            }],
+            attributes: { exclude: ['password'] } // Perbaiki typo: execlude -> exclude
         });
 
         return res.send({
@@ -227,10 +225,50 @@ const remove = async(req, res, _next) => {
     }
 };
 
+const cancelRemove = async(req, res, _next) => {
+    try {
+        const currentUser = req.user;
+        const { userId } = req.body;
+
+        // Memastikan hanya admin yang dapat mengaktifkan user
+        if (currentUser.role !== 'admin') {
+            return res.status(403).send({ message: "Hanya admin yang dapat mengaktifkan user" });
+        }
+
+        // Cek apakah user ada dan sudah dihapus (is_delete = true)
+        const user = await UserModel.findOne({
+            where: {
+                id: userId,
+                is_delete: true // Pastikan user memang dalam keadaan dihapus
+            },
+        });
+
+        if (!user) {
+            return res.status(404).send({
+                message: "User tidak ditemukan atau tidak dalam status non-aktif"
+            });
+        }
+
+        // Aktifkan user kembali
+        await UserModel.update({
+            is_delete: false
+        }, {
+            where: {
+                id: userId,
+            },
+        });
+
+        return res.send({ message: "User berhasil diaktifkan" });
+    } catch (error) {
+        console.error("Error:", error);
+        return res.status(500).send({ message: "Internal Server Error" });
+    }
+};
 
 module.exports = {
     indexUser,
     show,
     updateUser,
     remove,
+    cancelRemove
 };

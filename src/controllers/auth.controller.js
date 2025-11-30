@@ -197,8 +197,14 @@ const login = async(req, res, next) => {
         // Cari pengguna berdasarkan email
         const user = await UserModel.findOne({ where: { email } });
 
+        console.log("uuuuuuuuuuuuuuuuuser", user)
+
         if (!user) {
             return res.status(401).json({ message: "Invalid email/password" });
+        }
+
+        if (user.is_delete) {
+            return res.status(401).json({ message: "Maaf akun anda telah dinon aktifkan. Silakan hubungi admin Rutan bantaeng di cp. +6285342545607." });
         }
 
         // Bandingkan password
@@ -417,13 +423,11 @@ const logout = async(req, res) => {
 //     }
 // };
 
-// controllers/auth.controller.js
 const refreshToken = async(req, res, next) => {
     try {
         // Ambil refresh token dari cookie
         const refreshToken = req.cookies.refreshToken;
 
-        console.log("Rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrreceived refresh token from cookie:", refreshToken);
 
         if (!refreshToken) {
             return res.status(401).json({ message: "Refresh token tidak ditemukan" });
@@ -432,7 +436,6 @@ const refreshToken = async(req, res, next) => {
         // Verifikasi refresh token
         const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
-        console.log("Ddddddddddddddddddddddddddddddddddecoded refresh token:", decoded);
 
         // Cari user berdasarkan id dan refresh token
         const user = await UserModel.findOne({
@@ -442,7 +445,6 @@ const refreshToken = async(req, res, next) => {
             }
         });
 
-        console.log("Uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuser found for refresh token:", user);
 
         if (!user) {
             return res.status(401).json({ message: "Refresh token tidak valid" });

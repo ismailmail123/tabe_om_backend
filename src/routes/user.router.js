@@ -5,11 +5,12 @@ const router = express.Router();
 const { upload } = require("../config/multer");
 
 const { validateToken } = require("../middlewares/auth.js");
-const { indexUser, show, updateUser, remove } = require("../controllers/user.controller.js");
+const { indexUser, show, updateUser, remove, cancelRemove } = require("../controllers/user.controller.js");
 
 
 router.get("/", validateToken, indexUser);
 router.get("/:id", validateToken, show);
+router.put("/aktif", validateToken, cancelRemove);
 router.put("/:userId", validateToken, upload.single("photo"), updateUser);
 router.delete("/delete", validateToken, remove);
 

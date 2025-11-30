@@ -400,6 +400,8 @@ app.get(
 // );
 
 // **ALTERNATIVE ROUTE: Hash-based token delivery**
+
+
 app.get('/auth/google/hash', (req, res, next) => {
     const { role } = req.query;
 
