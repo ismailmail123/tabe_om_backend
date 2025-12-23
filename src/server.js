@@ -30,16 +30,40 @@ if (!process.env.JWT_SECRET) {
     process.exit(1);
 }
 
-// **KONFIGURASI CORS**
+// // **KONFIGURASI CORS**
+// const corsOptions = {
+//     origin: ['http://localhost:3000', 'https://tabe-om.vercel.app'],
+//     credentials: true,
+//     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+//     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+// };
+
+// **KONFIGURASI CORS YANG LEBIH TEPAT**
+const allowedOrigins = ['http://localhost:3000', 'https://tabe-om.vercel.app'];
+
 const corsOptions = {
-    origin: ['http://localhost:3000', 'https://tabe-om.vercel.app'],
+    origin: function(origin, callback) {
+        // Allow requests with no origin (like mobile apps, curl, postman)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+    exposedHeaders: ['Set-Cookie'],
+    maxAge: 86400 // 24 jam
 };
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
+
+// app.use(cors(corsOptions));
+// app.options('*', cors(corsOptions));
 
 app.use(passport.initialize());
 
