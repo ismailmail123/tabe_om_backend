@@ -207,7 +207,7 @@ app.use(passport.initialize());
 app.use("/struks", express.static(path.join(process.cwd(), "./")));
 
 // API Routes
-app.use("/api/auth", authRouter);
+app.use("/api/auth/v1", authRouter);
 app.use("/api/users", userRouter);
 app.use("/api/products", productRouter);
 app.use("/api/carts", cartRouter);
