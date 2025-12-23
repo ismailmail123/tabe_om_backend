@@ -232,7 +232,7 @@ app.get('/auth/google', (req, res, next) => {
 });
 
 app.get(
-    '/auth/google/callback',
+    '/auth/v1/google/callback',
     (req, res, next) => {
         console.log('=== GOOGLE OAUTH CALLBACK STARTED ===');
         console.log('Query params:', req.query);
@@ -402,7 +402,7 @@ app.get(
 // **ALTERNATIVE ROUTE: Hash-based token delivery**
 
 
-app.get('/auth/google/hash', (req, res, next) => {
+app.get('/auth/v1/google/hash', (req, res, next) => {
     const { role } = req.query;
 
     console.log("🔑 Hash-based OAuth - Role:", role);
@@ -417,7 +417,7 @@ app.get('/auth/google/hash', (req, res, next) => {
 });
 
 app.get(
-    '/auth/google/hash/callback',
+    '/auth/v1/google/hash/callback',
     (req, res, next) => {
         passport.authenticate('google', {
             session: false
@@ -468,7 +468,7 @@ app.get(
 );
 
 // **TEST ROUTE: Untuk debugging token delivery**
-app.get('/auth/test-token', (req, res) => {
+app.get('/auth/v1/test-token', (req, res) => {
     const testToken = jwt.sign({ test: true, timestamp: Date.now() },
         process.env.JWT_SECRET, { expiresIn: '1h' }
     );

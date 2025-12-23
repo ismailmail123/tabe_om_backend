@@ -28,6 +28,9 @@ module.exports = (sequelize, DataTypes) => {
         payment_method: DataTypes.ENUM('COD', 'transfer', 'virtual_account', 'qris'),
         amount: DataTypes.DECIMAL,
         payment_status: DataTypes.ENUM('pending', 'process', 'cancelled', 'completed'),
+        proof_of_payment: DataTypes.TEXT,
+        verified_at: DataTypes.DATE,
+        verified_by: DataTypes.STRING,
         payment_date: DataTypes.DATE
     }, {
         sequelize,

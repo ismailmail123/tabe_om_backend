@@ -63,12 +63,382 @@ const index = async(req, res, _next) => {
     }
 
 };
+// ! dengan midtrans
+// const createPayment = async(req, res) => {
+//     try {
+//         const { order_id } = req.params;
+//         const currentUser = req.user;
+//         const { payment_method } = req.body;
+
+
+//         // Input validation
+//         if (!order_id) {
+//             return res.status(400).json({ message: "Order ID wajib diisi" });
+//         }
+
+//         if (!payment_method || !['COD', 'transfer'].includes(payment_method)) {
+//             return res.status(400).json({ message: "Metode pembayaran tidak valid" });
+//         }
+
+//         const order = await OrderModel.findOne({
+//             where: { id: order_id },
+//         });
+
+//         const amount = parseFloat(order.total_price);
+
+//         if (!order) {
+//             return res.status(404).json({ message: "Order tidak ditemukan" });
+//         }
+
+
+//         // Determine initial status based on payment method
+//         const initial_payment_status = payment_method === 'COD' ? 'completed' : 'pending';
+//         const initial_order_status = payment_method === 'COD' ? 'process' : 'pending';
+
+//         // Create initial order history
+//         await OrderHistoryModel.create({
+//             order_id,
+//             user_id: currentUser.id,
+//             status: initial_order_status,
+//             note: payment_method === 'COD' ?
+//                 'Pembayaran COD - Bayar saat barang diterima' : 'Menunggu pembayaran transfer'
+//         });
+
+//         // Create payment record
+//         const payment = await PaymentModel.create({
+//             order_id,
+//             user_id: currentUser.id,
+//             payment_method,
+//             amount,
+//             payment_status: initial_payment_status,
+//             payment_date: new Date(),
+//             // midtrans_order_id: parameter.transaction_details.order_id
+//         });
+
+//         // Update order status
+//         await OrderModel.update({
+//             status: initial_order_status,
+//             payment_method,
+//             payment_status: initial_payment_status
+//         }, { where: { id: order_id } });
+
+//         // Process based on payment method
+//         if (payment_method === 'transfer') {
+//             // Create Midtrans transaction
+//             const parameter = {
+//                 transaction_details: {
+//                     order_id: `PAYMENT-${payment.id}`,
+//                     gross_amount: amount
+//                 },
+//                 credit_card: { secure: true },
+//                 customer_details: {
+//                     first_name: currentUser.username,
+//                     email: currentUser.email,
+//                     phone: currentUser.phone_number
+//                 },
+//                 callbacks: {
+//                     finish: 'http://localhost:3000/orderhistories',
+//                     error: 'http://localhost:3000/payment'
+//                 }
+//             };
+
+//             const midtransTransaction = await snap.createTransaction(parameter);
+
+//             // Update payment dengan midtrans_order_id dan token
+//             await payment.update({
+//                 midtrans_order_id: parameter.transaction_details.order_id,
+//                 midtrans_token: midtransTransaction.token
+//             });
+
+
+//             return res.status(201).json({
+//                 message: "Silakan lanjutkan pembayaran",
+//                 payment_url: midtransTransaction.redirect_url,
+//                 payment_data: payment
+//             });
+//         } else {
+
+
+//             // PROSES COD - KURANGI STOK
+//             const orderItems = await OrderItemModel.findAll({
+//                 where: { order_id },
+//                 include: [{
+//                     model: VariantModel,
+//                     as: 'variant',
+//                     include: [{
+//                         model: ProductModel,
+//                         as: 'product'
+//                     }]
+//                 }]
+//             });
+
+//             const orders = await OrderModel.findOne({
+//                 where: { id: order_id },
+//                 include: [{
+//                     model: UserModel,
+//                     as: 'user',
+//                 }]
+//             });
+
+
+
+//             // Gunakan transaction untuk COD juga
+//             const codTransaction = await sequelize.transaction();
+
+//             try {
+//                 for (const item of orderItems) {
+//                     if (!item.variant) continue;
+
+//                     // Method 1: Gunakan decrement
+//                     await VariantModel.decrement('stock', {
+//                         by: item.quantity,
+//                         where: { id: item.variant.id },
+//                         transaction: codTransaction
+//                     });
+
+//                     // Jika perlu update product juga
+//                     if (item.variant.product) {
+//                         await ProductModel.decrement('stock', {
+//                             by: item.quantity,
+//                             where: { id: item.variant.product.id },
+//                             transaction: codTransaction
+//                         });
+
+//                         await ProductModel.increment('total_sold', {
+//                             by: item.quantity,
+//                             where: { id: item.variant.product.id },
+//                             transaction: codTransaction
+//                         });
+//                     }
+//                 }
+
+//                 await codTransaction.commit();
+//             } catch (error) {
+//                 await codTransaction.rollback();
+//                 console.error('Gagal update stok COD:', error);
+//                 return res.status(500).json({ message: "Gagal update stok" });
+//             }
+
+
+//             // Prepare items data for Pusher
+//             const pusherItems = orderItems.map(item => ({
+//                 product_id: item.variant && item.variant.product ? item.variant.product.id : null,
+//                 name: item.variant && item.variant.product ? item.variant.product.name : null,
+//                 product_description: item.variant && item.variant.product ? item.variant.product.description : null,
+//                 image_url: item.variant && item.variant.product ? item.variant.product.image_url : null,
+//                 seller_id: item.variant && item.variant.product && item.variant.product.user ? item.variant.product.user.id : null,
+//                 seller_name: item.variant && item.variant.product && item.variant.product.user ? item.variant.product.user.name : null,
+//                 variant_id: item.variant ? item.variant.id : null,
+//                 variant_name: item.variant ? item.variant.name : null,
+//                 price: item.price,
+//                 quantity: item.quantity
+//             }));
+
+//             const pusherData = {
+//                 order_id: order.id,
+//                 user_id: currentUser.id,
+//                 customer_name: orders.user.name,
+//                 payment_method: 'COD',
+//                 amount: amount,
+//                 status: 'process',
+//                 order_date: new Date(),
+//                 distance: shippingInfo.distance,
+//                 address: shippingInfo.address,
+//                 items: pusherItems
+//             };
+
+//             // Kirim ke admin
+//             pusher.trigger('admin-channel', 'new-order', pusherData);
+
+
+//             // Kirim notifikasi ke semua seller yang terkait
+//             const sellerItemsMap = {};
+//             orderItems.forEach(item => {
+//                 const sellerId = item.variant.product.user_id;
+//                 if (sellerId) {
+//                     if (!sellerItemsMap[sellerId]) {
+//                         sellerItemsMap[sellerId] = [];
+//                     }
+//                     sellerItemsMap[sellerId].push(item);
+//                 }
+//             });
+
+//             // Kirim notifikasi ke setiap seller
+//             for (const [sellerId, items] of Object.entries(sellerItemsMap)) {
+//                 const sellerPusherData = {
+//                     order_id: order.id,
+//                     user_id: currentUser.id,
+//                     customer_name: orders.user.name,
+//                     payment_method: 'COD',
+//                     amount: items.reduce((total, item) => total + (item.price * item.quantity), 0),
+//                     status: 'process',
+//                     order_date: new Date(),
+//                     distance: shippingInfo.distance,
+//                     address: shippingInfo.address,
+//                     items: items.map(item => ({
+//                         product_id: item.variant.product.id,
+//                         name: item.variant.product.name,
+//                         variant_id: item.variant.id,
+//                         variant_name: item.variant.name,
+//                         price: item.price,
+//                         quantity: item.quantity,
+//                         img_url: item.variant.product.img_url
+//                     }))
+//                 };
+
+//                 pusher.trigger(`seller-${sellerId}`, 'new-order', sellerPusherData);
+//             }
+
+
+//             return res.status(201).json({
+//                 message: "Pembayaran COD berhasil diproses",
+//                 payment_data: payment
+//             });
+//         }
+//     } catch (error) {
+//         console.error('Payment Error:', error);
+//         return res.status(500).json({
+//             message: "Terjadi kesalahan saat memproses pembayaran",
+//             error: error.message
+//         });
+//     }
+// };
+
+// const createPayment = async(req, res) => {
+//     try {
+//         const { order_id } = req.params;
+//         const currentUser = req.user;
+
+//         console.log("ooooooooooooooooooooooooorder id", order_id);
+
+//         // Validasi apakah ada file yang diupload
+//         if (!req.files || !req.files.proof_of_payment) {
+//             return res.status(400).json({ message: "Bukti pembayaran wajib diunggah" });
+//         }
+
+//         const payment_proof_file = req.files.proof_of_payment[0];
+
+//         // Validasi tipe file
+//         const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf'];
+//         if (!allowedMimeTypes.includes(payment_proof_file.mimetype)) {
+//             return res.status(400).json({
+//                 message: "Format file tidak didukung. Gunakan JPG, PNG, GIF, atau PDF"
+//             });
+//         }
+
+//         // Validasi ukuran file (maksimal 5MB)
+//         const maxSize = 5 * 1024 * 1024; // 5MB
+//         if (payment_proof_file.size > maxSize) {
+//             return res.status(400).json({
+//                 message: "Ukuran file terlalu besar. Maksimal 5MB"
+//             });
+//         }
+
+//         // Path file yang sudah diupload
+//         const payment_proof_path = payment_proof_file.path;
+
+//         // const payment = await PaymentModel.findOne({
+//         //     where: {
+//         //         order_id: order_id,
+//         //         // user_id: currentUser.id // Pastikan hanya pemilik yang bisa konfirmasi
+//         //     },
+//         //     include: [{
+//         //         model: OrderModel,
+//         //         as: 'order'
+//         //     }]
+//         // });
+
+//         // if (!payment) {
+//         //     return res.status(404).json({ message: "Pembayaran tidak ditemukan" });
+//         // }
+
+//         // if (payment.payment_status !== 'pending') {
+//         //     return res.status(400).json({ message: "Pembayaran sudah dikonfirmasi atau dibatalkan" });
+//         // }
+
+//         // Update payment dengan bukti transfer
+//         await payment.update({
+//             payment_proof: payment_proof_path,
+//             payment_status: 'pending_verification',
+//             updated_at: new Date()
+//         });
+
+//         // Update order status
+//         await OrderModel.update({
+//             status: 'pending_verification'
+//         }, { where: { id: payment.order_id } });
+
+//         // Buat order history
+//         await OrderHistoryModel.create({
+//             order_id: payment.order_id,
+//             user_id: currentUser.id,
+//             status: 'pending_verification',
+//             note: 'Bukti pembayaran telah diunggah, menunggu verifikasi admin'
+//         });
+
+//         // Kirim notifikasi ke admin
+//         const orderDetails = await OrderModel.findOne({
+//             where: { id: payment.order_id },
+//             include: [{
+//                 model: UserModel,
+//                 as: 'user',
+//             }]
+//         });
+
+//         const adminPusherData = {
+//             order_id: payment.order_id,
+//             payment_id: payment.id,
+//             customer_name: orderDetails.user.name,
+//             amount: payment.amount,
+//             payment_proof: payment_proof_path,
+//             payment_method: payment.payment_method,
+//             payment_code: payment.payment_code,
+//             action_required: true,
+//             message: 'Bukti pembayaran perlu diverifikasi'
+//         };
+
+//         if (pusher) {
+//             pusher.trigger('admin-channel', 'payment-proof-uploaded', adminPusherData);
+//         }
+
+//         return res.status(200).json({
+//             status: "success",
+//             message: "Bukti pembayaran berhasil diunggah",
+//             data: {
+//                 payment: payment,
+//                 proof_url: payment_proof_path
+//             },
+//             next_step: "Menunggu verifikasi admin"
+//         });
+
+//     } catch (error) {
+//         console.error('Confirm Payment Error:', error);
+
+//         // Handle multer errors
+//         if (error.name === 'MulterError') {
+//             if (error.code === 'LIMIT_FILE_SIZE') {
+//                 return res.status(400).json({
+//                     message: "Ukuran file terlalu besar. Maksimal 5MB"
+//                 });
+//             }
+//             return res.status(400).json({
+//                 message: "Error uploading file: " + error.message
+//             });
+//         }
+
+//         return res.status(500).json({
+//             status: "error",
+//             message: "Terjadi kesalahan saat mengunggah bukti pembayaran",
+//             error: error.message
+//         });
+//     }
+// };
 
 const createPayment = async(req, res) => {
     try {
         const { order_id } = req.params;
         const currentUser = req.user;
-        const { payment_method } = req.body;
+        // const { payment_method } = req.body;
 
 
         // Input validation
@@ -76,31 +446,62 @@ const createPayment = async(req, res) => {
             return res.status(400).json({ message: "Order ID wajib diisi" });
         }
 
-        if (!payment_method || !['COD', 'transfer'].includes(payment_method)) {
-            return res.status(400).json({ message: "Metode pembayaran tidak valid" });
-        }
-
         const order = await OrderModel.findOne({
             where: { id: order_id },
         });
 
-        const amount = parseFloat(order.total_price);
+        // console.log("ooooooooooooooooooooooooorder", order.payment_method);
+
+        // if (order.payment_method !== 'COD' || order.payment_method !== 'transfer') {
+        //     return res.status(400).json({ message: "Metode pembayaran tidak valid" });
+        // }
+
+        //         // Validasi apakah ada file yang diupload
+        if (!req.files || !req.files.proof_of_payment) {
+            return res.status(400).json({ message: "Bukti pembayaran wajib diunggah" });
+        }
+
+        const payment_proof_file = req.files.proof_of_payment[0];
+
+        // Validasi tipe file
+        const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf'];
+        if (!allowedMimeTypes.includes(payment_proof_file.mimetype)) {
+            return res.status(400).json({
+                message: "Format file tidak didukung. Gunakan JPG, PNG, GIF, atau PDF"
+            });
+        }
+
+        // Validasi ukuran file (maksimal 5MB)
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (payment_proof_file.size > maxSize) {
+            return res.status(400).json({
+                message: "Ukuran file terlalu besar. Maksimal 5MB"
+            });
+        }
+
+        // Path file yang sudah diupload
+        const payment_proof_path = payment_proof_file.path;
+
+        // const order = await OrderModel.findOne({
+        //     where: { id: order_id },
+        // });
 
         if (!order) {
             return res.status(404).json({ message: "Order tidak ditemukan" });
         }
 
+        const amount = parseFloat(order.total_price);
 
         // Determine initial status based on payment method
-        const initial_payment_status = payment_method === 'COD' ? 'completed' : 'pending';
-        const initial_order_status = payment_method === 'COD' ? 'process' : 'pending';
+        const initial_payment_status = order.payment_method === 'COD' ? 'completed' : 'process';
+        const initial_order_status = order.payment_method === 'COD' ? 'process' : 'pending';
 
         // Create initial order history
         await OrderHistoryModel.create({
             order_id,
             user_id: currentUser.id,
             status: initial_order_status,
-            note: payment_method === 'COD' ?
+            note: order.payment_method === 'COD' ?
                 'Pembayaran COD - Bayar saat barang diterima' : 'Menunggu pembayaran transfer'
         });
 
@@ -108,95 +509,126 @@ const createPayment = async(req, res) => {
         const payment = await PaymentModel.create({
             order_id,
             user_id: currentUser.id,
-            payment_method,
+            payment_method: order.payment_method,
             amount,
             payment_status: initial_payment_status,
             payment_date: new Date(),
-            // midtrans_order_id: parameter.transaction_details.order_id
+            proof_of_payment: payment_proof_path
         });
 
         // Update order status
         await OrderModel.update({
             status: initial_order_status,
-            payment_method,
+            payment_method: order.payment_method,
             payment_status: initial_payment_status
         }, { where: { id: order_id } });
 
+        // Get order details for Pusher
+        const orderItems = await OrderItemModel.findAll({
+            where: { order_id },
+            include: [{
+                model: VariantModel,
+                as: 'variant',
+                include: [{
+                    model: ProductModel,
+                    as: 'product'
+                }]
+            }]
+        });
+
+        const orderDetails = await OrderModel.findOne({
+            where: { id: order_id },
+            include: [{
+                model: UserModel,
+                as: 'user',
+            }]
+        });
+
         // Process based on payment method
-        if (payment_method === 'transfer') {
-            // Create Midtrans transaction
-            const parameter = {
-                transaction_details: {
-                    order_id: `PAYMENT-${payment.id}`,
-                    gross_amount: amount
-                },
-                credit_card: { secure: true },
-                customer_details: {
-                    first_name: currentUser.username,
-                    email: currentUser.email,
-                    phone: currentUser.phone_number
-                },
-                callbacks: {
-                    finish: 'http://localhost:3000/orderhistories',
-                    error: 'http://localhost:3000/payment'
-                }
+        if (order.payment_method === 'transfer') {
+            // TRANSFER MANUAL - Tidak perlu Midtrans
+            // Kirim notifikasi ke admin untuk verifikasi pembayaran transfer
+
+            await OrderHistoryModel.create({
+                order_id,
+                user_id: currentUser.id,
+                status: 'pending',
+                note: 'Bukti pembayaran telah diunggah, menunggu verifikasi admin'
+            });
+
+            // Prepare items data for Pusher
+            const pusherItems = orderItems.map(item => ({
+                product_id: item.variant && item.variant.product ? item.variant.product.id : null,
+                name: item.variant && item.variant.product ? item.variant.product.name : null,
+                product_description: item.variant && item.variant.product ? item.variant.product.description : null,
+                image_url: item.variant && item.variant.product ? item.variant.product.image_url : null,
+                seller_id: item.variant && item.variant.product && item.variant.product.user ? item.variant.product.user.id : null,
+                seller_name: item.variant && item.variant.product && item.variant.product.user ? item.variant.product.user.name : null,
+                variant_id: item.variant ? item.variant.id : null,
+                variant_name: item.variant ? item.variant.name : null,
+                price: item.price,
+                quantity: item.quantity
+            }));
+
+            const pusherData = {
+                order_id: order.id,
+                user_id: currentUser.id,
+                customer_name: orderDetails.user.name,
+                customer_email: currentUser.email,
+                customer_phone: currentUser.phone_number,
+                payment_method: 'transfer',
+                payment_status: 'process',
+                amount: amount,
+                status: 'process',
+                order_date: new Date(),
+                payment_id: payment.id,
+                items: pusherItems,
+                note: 'Menunggu verifikasi pembayaran transfer'
             };
 
-            const midtransTransaction = await snap.createTransaction(parameter);
+            // Kirim ke admin channel untuk notifikasi pembayaran pending
+            pusher.trigger('admin-channel', 'pending-payment', pusherData);
 
-            // Update payment dengan midtrans_order_id dan token
-            await payment.update({
-                midtrans_order_id: parameter.transaction_details.order_id,
-                midtrans_token: midtransTransaction.token
+            // Kirim notifikasi ke user
+            pusher.trigger(`user-${currentUser.id}`, 'payment-pending', {
+                message: 'Pembayaran transfer menunggu verifikasi',
+                order_id: order.id,
+                amount: amount,
+                payment_method: 'transfer',
+                bank_account: '1234567890 (Bank ABC)', // Informasi rekening bank
+                payment_instructions: 'Silakan transfer ke rekening di atas dan unggah bukti transfer'
             });
 
 
             return res.status(201).json({
-                message: "Silakan lanjutkan pembayaran",
-                payment_url: midtransTransaction.redirect_url,
-                payment_data: payment
+                message: "Pembayaran transfer berhasil diajukan",
+                payment_data: payment,
+                instructions: {
+                    bank_account: '1234567890',
+                    bank_name: 'Bank ABC',
+                    account_name: 'Nama Toko Anda',
+                    amount: amount,
+                    note: `Order ID: ${order.id}`
+                }
             });
+
+
         } else {
-
-
             // PROSES COD - KURANGI STOK
-            const orderItems = await OrderItemModel.findAll({
-                where: { order_id },
-                include: [{
-                    model: VariantModel,
-                    as: 'variant',
-                    include: [{
-                        model: ProductModel,
-                        as: 'product'
-                    }]
-                }]
-            });
-
-            const orders = await OrderModel.findOne({
-                where: { id: order_id },
-                include: [{
-                    model: UserModel,
-                    as: 'user',
-                }]
-            });
-
-
-
-            // Gunakan transaction untuk COD juga
             const codTransaction = await sequelize.transaction();
 
             try {
                 for (const item of orderItems) {
                     if (!item.variant) continue;
 
-                    // Method 1: Gunakan decrement
+                    // Kurangi stok variant
                     await VariantModel.decrement('stock', {
                         by: item.quantity,
                         where: { id: item.variant.id },
                         transaction: codTransaction
                     });
 
-                    // Jika perlu update product juga
+                    // Update product stock dan total sold
                     if (item.variant.product) {
                         await ProductModel.decrement('stock', {
                             by: item.quantity,
@@ -219,8 +651,7 @@ const createPayment = async(req, res) => {
                 return res.status(500).json({ message: "Gagal update stok" });
             }
 
-
-            // Prepare items data for Pusher
+            // Prepare items data for Pusher untuk COD
             const pusherItems = orderItems.map(item => ({
                 product_id: item.variant && item.variant.product ? item.variant.product.id : null,
                 name: item.variant && item.variant.product ? item.variant.product.name : null,
@@ -237,19 +668,18 @@ const createPayment = async(req, res) => {
             const pusherData = {
                 order_id: order.id,
                 user_id: currentUser.id,
-                customer_name: orders.user.name,
+                customer_name: orderDetails.user.name,
                 payment_method: 'COD',
+                payment_status: 'completed',
                 amount: amount,
                 status: 'process',
                 order_date: new Date(),
-                distance: shippingInfo.distance,
-                address: shippingInfo.address,
-                items: pusherItems
+                items: pusherItems,
+                note: 'Pesanan COD siap diproses'
             };
 
             // Kirim ke admin
             pusher.trigger('admin-channel', 'new-order', pusherData);
-
 
             // Kirim notifikasi ke semua seller yang terkait
             const sellerItemsMap = {};
@@ -268,13 +698,11 @@ const createPayment = async(req, res) => {
                 const sellerPusherData = {
                     order_id: order.id,
                     user_id: currentUser.id,
-                    customer_name: orders.user.name,
+                    customer_name: orderDetails.user.name,
                     payment_method: 'COD',
                     amount: items.reduce((total, item) => total + (item.price * item.quantity), 0),
                     status: 'process',
                     order_date: new Date(),
-                    distance: shippingInfo.distance,
-                    address: shippingInfo.address,
                     items: items.map(item => ({
                         product_id: item.variant.product.id,
                         name: item.variant.product.name,
@@ -289,6 +717,13 @@ const createPayment = async(req, res) => {
                 pusher.trigger(`seller-${sellerId}`, 'new-order', sellerPusherData);
             }
 
+            // Kirim notifikasi ke user
+            pusher.trigger(`user-${currentUser.id}`, 'order-confirmed', {
+                message: 'Pesanan COD berhasil dibuat',
+                order_id: order.id,
+                amount: amount,
+                status: 'process'
+            });
 
             return res.status(201).json({
                 message: "Pembayaran COD berhasil diproses",
@@ -304,6 +739,134 @@ const createPayment = async(req, res) => {
     }
 };
 
+// Endpoint untuk admin verifikasi pembayaran
+const verifyPayment = async(req, res) => {
+    try {
+
+        const { order_id, status, note } = req.body; // status: 'completed' atau 'rejected'
+
+        console.log("ooooooooooooooooooooooooooooooooooooooooooooooooooorder id", order_id);
+
+        if (!status || !['completed', 'cancelled'].includes(status)) {
+            return res.status(400).json({ message: "Status verifikasi tidak valid" });
+        }
+
+        const payment = await PaymentModel.findOne({
+            where: { order_id: order_id },
+            include: [{
+                model: OrderModel,
+                as: 'order'
+            }]
+        });
+
+        if (!payment) {
+            return res.status(404).json({ message: "Pembayaran tidak ditemukan" });
+        }
+
+        // Update payment status
+        await payment.update({
+            payment_status: status,
+            verified_at: new Date(),
+            verified_by: req.user.name,
+        });
+
+        // Update order status berdasarkan hasil verifikasi
+        let orderStatus;
+        let historyNote;
+        if (status === 'completed') {
+            orderStatus = 'process';
+            historyNote = `Pembayaran telah diverifikasi, pesanan diproses catatan oleh admin: ${note || 'Tidak ada catatan'}`;
+
+            // Kurangi stok untuk transfer yang berhasil
+            const orderItems = await OrderItemModel.findAll({
+                where: { order_id: payment.order_id },
+                include: [{
+                    model: VariantModel,
+                    as: 'variant',
+                    include: [{
+                        model: ProductModel,
+                        as: 'product'
+                    }]
+                }]
+            });
+
+            const transaction = await sequelize.transaction();
+            try {
+                for (const item of orderItems) {
+                    if (!item.variant) continue;
+
+                    await VariantModel.decrement('stock', {
+                        by: item.quantity,
+                        where: { id: item.variant.id },
+                        transaction: transaction
+                    });
+
+                    if (item.variant.product) {
+                        await ProductModel.decrement('stock', {
+                            by: item.quantity,
+                            where: { id: item.variant.product.id },
+                            transaction: transaction
+                        });
+
+                        await ProductModel.increment('total_sold', {
+                            by: item.quantity,
+                            where: { id: item.variant.product.id },
+                            transaction: transaction
+                        });
+                    }
+                }
+                await transaction.commit();
+            } catch (error) {
+                await transaction.rollback();
+                throw error;
+            }
+
+        } else {
+            orderStatus = 'cancelled';
+            historyNote = `Pembayaran ditolak: ${note || 'Tidak memenuhi kriteria'}`;
+        }
+
+        await OrderModel.update({
+            status: orderStatus,
+            payment_status: status
+        }, { where: { id: payment.order_id } });
+
+        // Buat order history
+        await OrderHistoryModel.create({
+            order_id: payment.order_id,
+            user_id: req.user.id,
+            status: orderStatus,
+            note: historyNote
+        });
+
+        // Kirim notifikasi ke user
+        const userPusherData = {
+            order_id: payment.order_id,
+            payment_id: payment.id,
+            status: orderStatus,
+            message: status === 'completed' ?
+                'Pembayaran Anda telah diverifikasi, pesanan sedang diproses' : `Pembayaran ditolak: ${note || 'Silakan hubungi admin'}`,
+            note: note
+        };
+        pusher.trigger(`user-${payment.user_id}`, 'payment-verified', userPusherData);
+
+        return res.status(200).json({
+            message: status === 'completed' ?
+                "Pembayaran berhasil diverifikasi" : "Pembayaran ditolak",
+            payment: payment,
+            order_status: orderStatus
+        });
+
+
+
+    } catch (error) {
+        console.error('Verify Payment Error:', error);
+        return res.status(500).json({
+            message: "Terjadi kesalahan saat memverifikasi pembayaran",
+            error: error.message
+        });
+    }
+};
 
 const handleMidtransNotification = async(req, res) => {
     const transaction = await sequelize.transaction();
@@ -502,19 +1065,82 @@ const handleMidtransNotification = async(req, res) => {
 };
 
 
+// const updateStatus = async(req, res, _next) => {
+//     try {
+//         const currentUser = req.user;
+//         const { order_id } = req.params;
+//         const { payment_status, proof_of_payment } = req.body;
+
+
+//         // Memastikan productId tidak undefined
+//         if (!order_id) {
+//             return res.status(400).send({ message: "Product ID tidak ditemukan" });
+//         }
+
+//         // Cari Order berdasarkan productId
+//         const payment = await PaymentModel.findOne({
+//             where: {
+//                 order_id,
+//                 user_id: currentUser.id,
+//             },
+//         });
+
+//         if (!payment) {
+//             return res.status(404).send({ message: "Payment tidak ditemukan atau Anda tidak memiliki izin untuk memperbaruinya" });
+//         }
+
+//         // Memvalidasi inputan dari user
+//         if (!payment_status) {
+//             return res.status(400).send({ message: "Tidak ada data yang diperbarui" });
+//         }
+
+
+
+//         // Update produk
+//         const updatedPayment = await payment.update({
+//             payment_status,
+//             payment_date: new Date(),
+//         });
+
+//         if (payment_status == 'failed') {
+//             await OrderModel.update({
+//                 status: 'cancelled',
+//             }, {
+//                 where: {
+//                     id: order_id,
+//                 },
+//             });
+//         }
+//         await OrderModel.update({
+//             payment_status: payment_status,
+//         }, {
+//             where: {
+//                 id: order_id,
+//             },
+//         });
+
+//         return res.send({
+//             message: "Order updated successfully",
+//             data: updatedPayment,
+//         });
+//     } catch (error) {
+//         console.error("Error:", error.message); // Hanya untuk debugging
+//         return res.status(500).json({ message: "Internal server error" });
+//     }
+// };
+
 const updateStatus = async(req, res, _next) => {
     try {
         const currentUser = req.user;
         const { order_id } = req.params;
         const { payment_status } = req.body;
 
-
-        // Memastikan productId tidak undefined
+        // Memastikan order_id tidak undefined
         if (!order_id) {
-            return res.status(400).send({ message: "Product ID tidak ditemukan" });
+            return res.status(400).send({ message: "Order ID tidak ditemukan" });
         }
 
-        // Cari Order berdasarkan productId
+        // Cari Payment berdasarkan order_id
         const payment = await PaymentModel.findOne({
             where: {
                 order_id,
@@ -522,46 +1148,127 @@ const updateStatus = async(req, res, _next) => {
             },
         });
 
+
         if (!payment) {
             return res.status(404).send({ message: "Payment tidak ditemukan atau Anda tidak memiliki izin untuk memperbaruinya" });
         }
 
         // Memvalidasi inputan dari user
         if (!payment_status) {
-            return res.status(400).send({ message: "Tidak ada data yang diperbarui" });
+            return res.status(400).send({ message: "Status pembayaran tidak boleh kosong" });
         }
 
-        // Update produk
-        const updatedPayment = await payment.update({
+        // Validasi status yang diizinkan
+        const allowedStatuses = ['pending', 'process', 'completed', 'cancelled'];
+        if (!allowedStatuses.includes(payment_status)) {
+            return res.status(400).send({
+                message: "Status tidak valid. Gunakan: pending, process, completed atau cancelled"
+            });
+        }
+
+        // Siapkan data untuk diupdate
+        const updateData = {
             payment_status,
             payment_date: new Date(),
-        });
+        };
 
-        if (payment_status == 'failed') {
+        // Jika ada file bukti pembayaran diupload, tambahkan ke updateData
+        if (req.files && req.files.proof_of_payment) {
+            const proofPhoto = req.files.proof_of_payment[0];
+
+            // Validasi tipe file
+            const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf'];
+            if (!allowedMimeTypes.includes(proofPhoto.mimetype)) {
+                return res.status(400).send({
+                    message: "Format file tidak didukung. Gunakan JPG, PNG, GIF, atau PDF"
+                });
+            }
+
+            // Validasi ukuran file (maksimal 5MB)
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (proofPhoto.size > maxSize) {
+                return res.status(400).send({
+                    message: "Ukuran file terlalu besar. Maksimal 5MB"
+                });
+            }
+
+            updateData.proof_of_payment = proofPhoto.path;
+
+            // Jika mengupload bukti, otomatis set status ke 'pending' untuk verifikasi
+            if (!payment_status) {
+                updateData.payment_status = 'process';
+            }
+        }
+
+        // Validasi: Jika status 'paid' tetapi tidak ada bukti pembayaran
+        if (payment_status === 'process' && !req.files.proof_of_payment && !payment.proof_of_payment) {
+            return res.status(400).send({
+                message: "Untuk status 'completed', bukti pembayaran harus diupload"
+            });
+        }
+
+        // Update payment
+        await payment.update(updateData);
+
+        // Update status order berdasarkan payment_status
+        if (payment_status === 'cancelled') {
             await OrderModel.update({
                 status: 'cancelled',
+                payment_status: payment_status,
+            }, {
+                where: {
+                    id: order_id,
+                },
+            });
+        } else if (payment_status === 'process') {
+            // Jika payment status paid, update order status menjadi process
+            await OrderModel.update({
+                status: 'process',
+                payment_status: payment_status,
+            }, {
+                where: {
+                    id: order_id,
+                },
+            });
+        } else {
+            // Untuk status lainnya (pending, refunded, dll)
+            await OrderModel.update({
+                payment_status: payment_status,
             }, {
                 where: {
                     id: order_id,
                 },
             });
         }
-        await OrderModel.update({
-            payment_status: payment_status,
-        }, {
+
+        // Ambil data payment yang sudah diupdate
+        const freshPaymentData = await PaymentModel.findOne({
             where: {
-                id: order_id,
+                id: payment.id,
             },
         });
 
         return res.send({
-            message: "Order updated successfully",
-            data: updatedPayment,
+            message: "Payment updated successfully",
+            data: freshPaymentData,
         });
     } catch (error) {
-        console.error("Error:", error.message); // Hanya untuk debugging
+        console.error("Error:", error.message);
+
+        // Handle multer errors
+        if (error.name === 'MulterError') {
+            if (error.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({
+                    message: "Ukuran file terlalu besar. Maksimal 5MB"
+                });
+            }
+            return res.status(400).json({
+                message: "Error uploading file: " + error.message
+            });
+        }
+
         return res.status(500).json({ message: "Internal server error" });
     }
 };
 
-module.exports = { index, updateStatus, createPayment, handleMidtransNotification };
+module.exports = { index, updateStatus, createPayment, handleMidtransNotification, verifyPayment };

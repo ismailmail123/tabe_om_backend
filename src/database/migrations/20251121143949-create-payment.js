@@ -29,6 +29,15 @@ module.exports = {
                 type: Sequelize.ENUM('pending', 'process', 'cancelled', 'completed'),
                 defaultValue: 'pending'
             },
+            proof_of_payment: {
+                type: Sequelize.TEXT
+            },
+            verified_at: {
+                type: Sequelize.DATE
+            },
+            verified_by: {
+                type: Sequelize.STRING
+            },
             payment_date: {
                 type: Sequelize.DATE
             },
