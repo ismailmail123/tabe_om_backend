@@ -217,7 +217,7 @@ app.use("/api/orders", orderRouter);
 app.use("/api/payments", paymentRouter);
 
 // **ROUTES GOOGLE OAUTH - VERSION 1: Query Parameters**
-app.get('/auth/google', (req, res, next) => {
+app.get('/auth/v1/google', (req, res, next) => {
     const { role } = req.query;
 
     const allowedRoles = ['user', 'admin', 'seller'];
@@ -454,7 +454,7 @@ app.get(
 
             // **OPTION 2: Redirect dengan hash (lebih reliable)**
             const encodedToken = encodeURIComponent(token);
-            const redirectUrl = `${process.env.CLIENT_URL}/auth/callback#token=${encodedToken}`;
+            const redirectUrl = `${process.env.CLIENT_URL}/auth/v1/callback#token=${encodedToken}`;
 
             console.log('🎯 Hash Redirect to:', redirectUrl);
 
@@ -476,7 +476,7 @@ app.get('/auth/v1/test-token', (req, res) => {
     const method = req.query.method || 'query';
 
     if (method === 'hash') {
-        res.redirect(`${process.env.CLIENT_URL}/auth/callback#token=${encodeURIComponent(testToken)}`);
+        res.redirect(`${process.env.CLIENT_URL}/auth/v1/callback#token=${encodeURIComponent(testToken)}`);
     } else {
         res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${encodeURIComponent(testToken)}`);
     }
