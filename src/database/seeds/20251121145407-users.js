@@ -4,7 +4,7 @@ module.exports = {
     async up(queryInterface, Sequelize) {
         return queryInterface.bulkInsert('users', [{
                 nama: 'Admin',
-                email: 'bataridmn@gmail.com',
+                email: 'tabeombantaeng@gmail.com',
                 password: '$2b$10$.HnWJ5My7jNggT8rfgeeSuWclRvjbzfv57M11CMQnN959ak3mC8QO', // Harus dienkripsi jika dalam produksi
                 role: 'admin',
                 alamat: 'Jl. Mawar No. 19 Kel. Pallantikang',
