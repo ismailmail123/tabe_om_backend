@@ -134,16 +134,22 @@ const verifyEmail = async(req, res, next) => {
 };
 
 
+
 // const login = async(req, res, next) => {
 //     const { email, password } = req.body;
-
 
 //     try {
 //         // Cari pengguna berdasarkan email
 //         const user = await UserModel.findOne({ where: { email } });
 
+//         console.log("uuuuuuuuuuuuuuuuuser", user)
+
 //         if (!user) {
 //             return res.status(401).json({ message: "Invalid email/password" });
+//         }
+
+//         if (user.is_delete) {
+//             return res.status(401).json({ message: "Maaf akun anda telah dinon aktifkan. Silakan hubungi admin Rutan bantaeng di cp. +6285342545607." });
 //         }
 
 //         // Bandingkan password
@@ -161,24 +167,42 @@ const verifyEmail = async(req, res, next) => {
 //             role: user.role,
 //         };
 
-//         // Buat token dengan masa berlaku (misalnya, 1 jam)
-//         const token = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: "24h" });
+//         // Buat token dengan masa berlaku
+//         const token = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: "1m" });
 //         const refreshToken = jwt.sign({ id: user.id }, process.env.JWT_REFRESH_SECRET, { expiresIn: "7d" });
 
 //         // Simpan refresh token di database
 //         await UserModel.update({ refresh_token: refreshToken }, { where: { id: user.id } });
 
-//         res.cookie('refreshToken', refreshToken, {
+//         // **KONFIGURASI COOKIE YANG DIPERBAIKI**
+//         const cookieOptions = {
 //             httpOnly: true,
-//             secure: process.env.NODE_ENV === 'production',
-//             sameSite: 'strict',
+//             secure: process.env.NODE_ENV === 'production', // false untuk development
+//             sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Perbaikan di sini
 //             maxAge: 7 * 24 * 60 * 60 * 1000, // 7 hari
-//             path: '/'
+//             path: '/',
+//         };
+
+//         // Jika di production, tambahkan domain
+//         if (process.env.NODE_ENV === 'production') {
+//             cookieOptions.domain = '.domainkamu.com'; // Ganti dengan domain Anda
+//         }
+
+//         // Set cookie
+//         res.cookie('refreshToken', refreshToken, cookieOptions);
+
+//         // Debug: cek apakah cookie ter-set
+//         console.log('Cookie yang diset:', {
+//             name: 'refreshToken',
+//             value: refreshToken ? 'ada' : 'tidak ada',
+//             options: cookieOptions
 //         });
 
+//         // **CEK HEADER RESPONSE**
+//         console.log('Response headers:', res.getHeaders());
 
 //         // Kirim respons ke frontend
-//         return res.send({
+//         return res.status(200).json({
 //             message: "Login successful",
 //             data: {
 //                 user: data,
@@ -190,14 +214,12 @@ const verifyEmail = async(req, res, next) => {
 //         next(err);
 //     }
 // };
+
 const login = async(req, res, next) => {
     const { email, password } = req.body;
 
     try {
-        // Cari pengguna berdasarkan email
         const user = await UserModel.findOne({ where: { email } });
-
-        console.log("uuuuuuuuuuuuuuuuuser", user)
 
         if (!user) {
             return res.status(401).json({ message: "Invalid email/password" });
@@ -207,13 +229,11 @@ const login = async(req, res, next) => {
             return res.status(401).json({ message: "Maaf akun anda telah dinon aktifkan. Silakan hubungi admin Rutan bantaeng di cp. +6285342545607." });
         }
 
-        // Bandingkan password
         const isValid = await bcrypt.compare(password, user.password);
         if (!isValid) {
             return res.status(401).json({ message: "Invalid email/password" });
         }
 
-        // Buat payload untuk token
         const data = {
             id: user.id,
             nama: user.nama,
@@ -222,41 +242,35 @@ const login = async(req, res, next) => {
             role: user.role,
         };
 
-        // Buat token dengan masa berlaku
         const token = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: "1m" });
         const refreshToken = jwt.sign({ id: user.id }, process.env.JWT_REFRESH_SECRET, { expiresIn: "7d" });
 
-        // Simpan refresh token di database
+        // **UPDATE REFRESH TOKEN KE DATABASE DULU**
         await UserModel.update({ refresh_token: refreshToken }, { where: { id: user.id } });
 
-        // **KONFIGURASI COOKIE YANG DIPERBAIKI**
+        // **KONFIGURASI COOKIE YANG LEBIH FLEKSIBEL**
+        const isProduction = process.env.NODE_ENV === 'production';
+
         const cookieOptions = {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production', // false untuk development
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // Perbaikan di sini
-            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 hari
+            secure: isProduction, // true untuk production (HTTPS)
+            sameSite: isProduction ? 'none' : 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000,
             path: '/',
         };
 
-        // Jika di production, tambahkan domain
-        if (process.env.NODE_ENV === 'production') {
-            cookieOptions.domain = '.domainkamu.com'; // Ganti dengan domain Anda
-        }
+        // **HAPUS KONFIGURASI DOMAIN JIKA TIDAK DIPERLUKAN**
+        // Biarkan browser menentukan domain secara otomatis
+        // cookieOptions.domain hanya diperlukan untuk subdomain spesifik
 
         // Set cookie
         res.cookie('refreshToken', refreshToken, cookieOptions);
 
-        // Debug: cek apakah cookie ter-set
-        console.log('Cookie yang diset:', {
-            name: 'refreshToken',
-            value: refreshToken ? 'ada' : 'tidak ada',
-            options: cookieOptions
-        });
+        // **VERIFIKASI: Ambil data user setelah update**
+        const updatedUser = await UserModel.findOne({ where: { id: user.id } });
+        console.log('Token di database:', updatedUser.refresh_token);
+        console.log('Token di cookie:', refreshToken);
 
-        // **CEK HEADER RESPONSE**
-        console.log('Response headers:', res.getHeaders());
-
-        // Kirim respons ke frontend
         return res.status(200).json({
             message: "Login successful",
             data: {
@@ -269,6 +283,7 @@ const login = async(req, res, next) => {
         next(err);
     }
 };
+
 const verifyDevice = async(req, res, next) => {
     const { email, kode_verifikasi } = req.body;
 
@@ -350,111 +365,113 @@ const logout = async(req, res) => {
     }
 };
 
-// const refreshToken = async(req, res) => {
-//     // Ambil refresh token dari cookie, bukan dari body
-//     const refreshToken = req.cookies.refreshToken;
 
-
-//     if (!refreshToken) {
-//         return res.status(401).json({ message: "Refresh token required" });
-//     }
-
+// const refreshToken = async(req, res, next) => {
 //     try {
-//         // 1. Verifikasi refresh token
+//         // Ambil refresh token dari cookie
+//         const refreshToken = req.cookies.refreshToken;
+
+
+//         if (!refreshToken) {
+//             return res.status(401).json({ message: "Refresh token tidak ditemukan" });
+//         }
+
+//         // Verifikasi refresh token
 //         const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
-//         // 2. Cek di database
-//         const user = await UserModel.findOne({ where: { id: decoded.id } });
-//         if (!user || user.refresh_token !== refreshToken) {
-//             return res.status(401).json({ message: "Invalid refresh token" });
-//         }
 
-//         // 3. Buat payload untuk token baru
-//         const data = {
-//             id: user.id,
-//             username: user.name,
-//             email: user.email,
-//             address: user.address,
-//             phone_number: user.phone_number,
-//             profile_image: user.profile_image,
-//             role: user.role,
-//             createdAt: user.createdAt,
-//         };
 
-//         // Tambahkan data store hanya untuk seller
-//         if (user.role === 'seller') {
-//             const store = await StoreModel.findOne({ where: { seller_id: user.id } });
-//             if (store) {
-//                 data.open_store = store.open_time;
-//                 data.close_store = store.close_time;
-//                 data.store_status = store.store_status;
+//         console.log("Dddddddddddddddddddddddddddddddddecoded refresh token:", decoded);
+
+//         console.log("Rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrefresh token from cookie:", refreshToken);
+
+//         // Cari user berdasarkan id dan refresh token
+//         const user = await UserModel.findOne({
+//             where: {
+//                 id: decoded.id,
+//                 refresh_token: refreshToken
 //             }
-//         }
-
-//         // 4. BUAT access token baru (1 jam)
-//         const newAccessToken = jwt.sign(data, process.env.JWT_SECRET, { expiresIn: "1m" });
-
-//         // 5. BUAT refresh token baru (7 hari) - Opsional: rotate refresh token
-//         const newRefreshToken = jwt.sign({ id: user.id }, process.env.JWT_REFRESH_SECRET, { expiresIn: "7d" });
-
-//         // 6. SIMPAN refresh token baru ke database
-//         await UserModel.update({ refresh_token: newRefreshToken }, { where: { id: user.id } });
-
-//         // 7. Set cookie baru dengan refresh token baru
-//         res.cookie('refreshToken', newRefreshToken, {
-//             httpOnly: true,
-//             secure: process.env.NODE_ENV === 'production',
-//             sameSite: 'strict',
-//             maxAge: 7 * 24 * 60 * 60 * 1000,
-//             path: '/api/auth/refresh-token'
 //         });
 
-//         // 8. KIRIM ke frontend (hanya access token)
+//         console.log("Uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuser found for refresh token:", user.refresh_token);
+
+
+//         if (!user) {
+//             return res.status(401).json({ message: "Refresh token tidak valid" });
+//         }
+
+//         // Buat access token baru
+//         const newAccessToken = jwt.sign({
+//                 id: user.id,
+//                 nama: user.nama,
+//                 email: user.email,
+//                 alamat: user.alamat,
+//                 role: user.role,
+//             },
+//             process.env.JWT_SECRET, { expiresIn: "7d" } // Access token 7 hari
+//         );
+
 //         res.json({
-//             token: newAccessToken, // Access token baru untuk localStorage
-//             // refreshToken tidak dikirim di body karena sudah di cookie
+//             message: "Token berhasil diperbarui",
+//             token: newAccessToken
 //         });
 //     } catch (error) {
 //         console.error("Refresh token error:", error);
 
-//         // Clear cookie jika refresh token invalid
-//         res.clearCookie('refreshToken');
-//         res.status(401).json({ message: "Invalid or expired refresh token" });
+//         if (error.name === 'TokenExpiredError') {
+//             return res.status(401).json({ message: "Refresh token expired" });
+//         }
+//         if (error.name === 'JsonWebTokenError') {
+//             return res.status(401).json({ message: "Refresh token tidak valid" });
+//         }
+
+//         next(error);
 //     }
 // };
 
 const refreshToken = async(req, res, next) => {
     try {
-        // Ambil refresh token dari cookie
-        const refreshToken = req.cookies.refreshToken;
+        // **LOG SEMUA COOKIES YANG DITERIMA**
+        console.log('Semua cookies:', req.cookies);
+        console.log('Headers cookie:', req.headers.cookie);
 
+        const refreshToken = req.cookies.refreshToken;
 
         if (!refreshToken) {
             return res.status(401).json({ message: "Refresh token tidak ditemukan" });
         }
 
-        // Verifikasi refresh token
-        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        // **VERIFIKASI TOKEN**
+        let decoded;
+        try {
+            decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        } catch (error) {
+            console.error("Error verifying token:", error.message);
+            return res.status(401).json({ message: "Refresh token tidak valid" });
+        }
 
+        console.log("Decoded refresh token:", decoded);
+        console.log("Refresh token from cookie:", refreshToken);
 
-
-        console.log("Dddddddddddddddddddddddddddddddddecoded refresh token:", decoded);
-
-        console.log("Rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrefresh token from cookie:", refreshToken);
-
-        // Cari user berdasarkan id dan refresh token
+        // **CARI USER DENGAN REFRESH TOKEN YANG SAMA**
         const user = await UserModel.findOne({
-            where: {
-                id: decoded.id,
-                refresh_token: refreshToken
-            }
+            where: { id: decoded.id }
         });
 
-        console.log("Uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuser found for refresh token:", user.refresh_token);
-
-
         if (!user) {
-            return res.status(401).json({ message: "Refresh token tidak valid" });
+            return res.status(401).json({ message: "User tidak ditemukan" });
+        }
+
+        console.log("Refresh token di database:", user.refresh_token);
+        console.log("Refresh token dari cookie:", refreshToken);
+        console.log("Apakah sama?", user.refresh_token === refreshToken);
+
+        // **PERIKSA KESAMAAN TOKEN**
+        if (user.refresh_token !== refreshToken) {
+            return res.status(401).json({
+                message: "Refresh token tidak cocok",
+                detail: "Token di database berbeda dengan token di cookie"
+            });
         }
 
         // Buat access token baru
@@ -465,7 +482,7 @@ const refreshToken = async(req, res, next) => {
                 alamat: user.alamat,
                 role: user.role,
             },
-            process.env.JWT_SECRET, { expiresIn: "7d" } // Access token 7 hari
+            process.env.JWT_SECRET, { expiresIn: "7d" }
         );
 
         res.json({
@@ -485,7 +502,6 @@ const refreshToken = async(req, res, next) => {
         next(error);
     }
 };
-
 
 module.exports = {
     login,
