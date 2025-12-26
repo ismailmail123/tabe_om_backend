@@ -437,6 +437,11 @@ const refreshToken = async(req, res, next) => {
         const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
 
 
+
+        console.log("Dddddddddddddddddddddddddddddddddecoded refresh token:", decoded);
+
+        console.log("Rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrefresh token from cookie:", refreshToken);
+
         // Cari user berdasarkan id dan refresh token
         const user = await UserModel.findOne({
             where: {
@@ -444,6 +449,8 @@ const refreshToken = async(req, res, next) => {
                 refresh_token: refreshToken
             }
         });
+
+        console.log("Uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuser found for refresh token:", user.refresh_token);
 
 
         if (!user) {
