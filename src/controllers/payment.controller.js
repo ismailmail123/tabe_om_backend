@@ -6,10 +6,13 @@ const {
     variant: VariantModel,
     order_historie: OrderHistoryModel,
     user: UserModel,
+    order_data: OrderDataModel,
+    order_history: HistoryModel,
     sequelize,
 } = require("../models");
 const crypto = require('crypto');
 const midtransClient = require("midtrans-client");
+const nodemailer = require("nodemailer");
 
 const Pusher = require('pusher');
 
@@ -28,6 +31,374 @@ const snap = new midtransClient.Snap({
     serverKey: process.env.MIDTRANS_SERVER_KEY, // Pastikan ini sesuai dengan .env
     clientKey: process.env.MIDTRANS_CLIENT_KEY // Pastikan ini sesuai dengan .env
 });
+
+const sendNotificationPayment = async(order, payment_proof_path) => {
+    const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+            user: process.env.GMAIL_USER,
+            pass: process.env.GMAIL_PASSWORD,
+        },
+        tls: {
+            rejectUnauthorized: false,
+        },
+    });
+
+    // Format total harga ke Rupiah
+    const formatRupiah = (amount) => {
+        return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 0
+        }).format(amount);
+    };
+
+    // Format tanggal
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('id-ID', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Notifikasi Pembayaran Baru</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+            
+            body {
+                background-color: #f5f7fa;
+                padding: 20px;
+            }
+            
+            .email-container {
+                max-width: 700px;
+                margin: 0 auto;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 20px;
+                overflow: hidden;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+            }
+            
+            .email-header {
+                background: linear-gradient(135deg, #4a6ee0 0%, #6a4aa2 100%);
+                padding: 40px 30px;
+                text-align: center;
+                color: white;
+            }
+            
+            .email-header h1 {
+                font-size: 32px;
+                font-weight: 700;
+                margin-bottom: 10px;
+                letter-spacing: 0.5px;
+            }
+            
+            .email-header p {
+                font-size: 16px;
+                opacity: 0.9;
+                font-weight: 300;
+            }
+            
+            .email-body {
+                background-color: white;
+                padding: 40px;
+            }
+            
+            .notification-badge {
+                display: inline-block;
+                background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+                color: white;
+                padding: 8px 20px;
+                border-radius: 30px;
+                font-size: 14px;
+                font-weight: 600;
+                margin-bottom: 30px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+            
+            .order-info {
+                background: #f8f9ff;
+                border-radius: 15px;
+                padding: 25px;
+                margin-bottom: 30px;
+                border-left: 5px solid #667eea;
+                box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
+            }
+            
+            .order-info h2 {
+                color: #333;
+                font-size: 22px;
+                margin-bottom: 20px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            
+            .order-info h2:before {
+                content: "📦";
+                font-size: 20px;
+            }
+            
+            .info-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 20px;
+                margin-top: 20px;
+            }
+            
+            .info-item {
+                background: white;
+                padding: 15px;
+                border-radius: 10px;
+                box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+                border: 1px solid #eef1ff;
+            }
+            
+            .info-label {
+                font-size: 12px;
+                color: #666;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                margin-bottom: 5px;
+                font-weight: 600;
+            }
+            
+            .info-value {
+                font-size: 18px;
+                color: #333;
+                font-weight: 600;
+            }
+            
+            .highlight-value {
+                color: #667eea;
+                font-size: 20px;
+            }
+            
+            .wbp-details {
+                background: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%);
+                border-radius: 15px;
+                padding: 25px;
+                margin-top: 30px;
+            }
+            
+            .wbp-details h3 {
+                color: #333;
+                font-size: 20px;
+                margin-bottom: 20px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            
+            .wbp-details h3:before {
+                content: "👤";
+                font-size: 18px;
+            }
+            
+            .wbp-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 15px;
+                margin-top: 15px;
+            }
+            
+            .wbp-item {
+                background: rgba(255, 255, 255, 0.9);
+                padding: 15px;
+                border-radius: 10px;
+                box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
+            }
+            
+            .status-badge {
+                display: inline-block;
+                padding: 8px 20px;
+                border-radius: 20px;
+                font-size: 14px;
+                font-weight: 600;
+                margin-top: 20px;
+                background: #fff3cd;
+                color: #856404;
+                border: 1px solid #ffeaa7;
+            }
+            
+            .payment-status {
+                background: #ffd8d8;
+                color: #721c24;
+                border: 1px solid #f5c6cb;
+            }
+            
+            .footer-note {
+                text-align: center;
+                margin-top: 40px;
+                padding-top: 30px;
+                border-top: 1px solid #eee;
+                color: #666;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+            
+            .action-button {
+                display: inline-block;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 14px 32px;
+                text-decoration: none;
+                border-radius: 30px;
+                font-weight: 600;
+                font-size: 16px;
+                margin-top: 30px;
+                transition: all 0.3s ease;
+                box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            }
+            
+            .action-button:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.5);
+            }
+            
+            .logo {
+                font-size: 24px;
+                font-weight: 700;
+                color: white;
+                margin-bottom: 20px;
+                display: inline-block;
+            }
+            
+            @media (max-width: 600px) {
+                .email-body {
+                    padding: 25px;
+                }
+                
+                .info-grid, .wbp-grid {
+                    grid-template-columns: 1fr;
+                }
+                
+                .email-header {
+                    padding: 30px 20px;
+                }
+                
+                .email-header h1 {
+                    font-size: 26px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="email-container">
+            <div class="email-header">
+                <div class="logo">Layanan WBP</div>
+                <h1>📬 Notifikasi Pembayaran Baru</h1>
+                <p>Pesanan baru memerlukan konfirmasi pembayaran</p>
+            </div>
+            
+            <div class="email-body">
+                <div class="notification-badge">Pembayaran Menunggu</div>
+                
+                <div class="order-info">
+                    <h2>Detail Pesanan</h2>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <div class="info-label">Order ID</div>
+                            <div class="info-value">${order.id}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Kode Pesanan</div>
+                            <div class="info-value">#${order.order_code}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Total Pembayaran</div>
+                            <div class="info-value highlight-value">${formatRupiah(order.total_price)}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Tanggal Pesanan</div>
+                            <div class="info-value">${formatDate(order.createdAt)}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Bukti Pembayaran</div>
+                            <img src=${payment_proof_path} alt="Bukti Pembayaran" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"/>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="wbp-details">
+                    <h3>Informasi WBP (Warga Binaan Pemasyarakatan)</h3>
+                    <div class="wbp-grid">
+                        <div class="wbp-item">
+                            <div class="info-label">Nama WBP</div>
+                            <div class="info-value">${order.order_data[0].wbp_name}</div>
+                        </div>
+                        <div class="wbp-item">
+                            <div class="info-label">Nomor Register</div>
+                            <div class="info-value">${order.order_data[0].wbp_register_number}</div>
+                        </div>
+                        <div class="wbp-item">
+                            <div class="info-label">Ruang / Sel</div>
+                            <div class="info-value">${order.order_data[0].wbp_room}</div>
+                        </div>
+                        <div class="wbp-item">
+                            <div class="info-label">Pengirim</div>
+                            <div class="info-value">${order.order_data[0].wbp_sender}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <div class="status-badge">Status Pesanan: ${order.status}</div>
+                    <div class="status-badge payment-status" style="margin-left: 10px;">
+                        Status Pembayaran: ${order.payment_status}
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="#" class="action-button">Lihat Detail Lengkap</a>
+                </div>
+                
+                <div class="footer-note">
+                    <p><strong>Segera lakukan verifikasi pembayaran untuk melanjutkan proses pesanan.</strong></p>
+                    <p>Email ini dikirim secara otomatis. Mohon tidak membalas email ini.</p>
+                    <p style="margin-top: 20px; font-size: 12px; opacity: 0.7;">
+                        © ${new Date().getFullYear()} Layanan WBP. All rights reserved.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    `;
+
+    const mailOptions = {
+        from: process.env.GMAIL_USER,
+        to: 'ismailbary2@gmail.com',
+        subject: `[Aksi Diperlukan] Notifikasi Pembayaran Baru - Order #${order.order_code}`,
+        html: htmlContent,
+        text: `Pembayaran Baru Menunggu Verifikasi\n\nOrder ID: ${order.order_id}\nKode Pesanan: ${order.order_code}\nTotal: ${formatRupiah(order.total)}\nNama WBP: ${order.order_data[0].wbp_name}\nPengirim: ${order.order_data[0].wbp_sender}\nRuang: ${order.order_data[0].wbp_room}\nNomor Register: ${order.order_data[0].wbp_register_number}\n\nSegera verifikasi pembayaran melalui dashboard admin.`,
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`Email notifikasi pembayaran berhasil dikirim ke ismailbary2@gmail.com`);
+    } catch (error) {
+        console.error('Error sending payment notification email:', error);
+        throw error;
+    }
+};
 
 
 /**
@@ -448,9 +819,19 @@ const createPayment = async(req, res) => {
 
         const order = await OrderModel.findOne({
             where: { id: order_id },
+            include: [
+
+                {
+                    model: OrderDataModel,
+                    as: "order_data",
+                },
+
+
+            ],
+
         });
 
-        // console.log("ooooooooooooooooooooooooorder", order.payment_method);
+        console.log("ooooooooooooooooooooooooorder", order.payment);
 
         // if (order.payment_method !== 'COD' || order.payment_method !== 'transfer') {
         //     return res.status(400).json({ message: "Metode pembayaran tidak valid" });
@@ -555,6 +936,8 @@ const createPayment = async(req, res) => {
                 status: 'pending',
                 note: 'Bukti pembayaran telah diunggah, menunggu verifikasi admin'
             });
+
+            await sendNotificationPayment(order, payment_proof_path);
 
             // Prepare items data for Pusher
             const pusherItems = orderItems.map(item => ({

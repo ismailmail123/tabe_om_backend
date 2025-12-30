@@ -34,5 +34,3 @@ jobs:
             
             echo "✅ Deployment completed!"
             echo "📝 Latest commit: $(git log --oneline -1)"
-            echo "✅ Deployment completed!"
-            echo "📝 Latest commit: $(git log --oneline -1)"
