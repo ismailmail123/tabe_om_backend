@@ -367,7 +367,7 @@ const sendNotificationPayment = async(order, payment_proof_path) => {
                 </div>
                 
                 <div style="text-align: center; margin-top: 30px;">
-                    <a href="#" class="action-button">Lihat Detail Lengkap</a>
+                    <a href="https://tabe-om.vercel.app/dashboard/transaksi" class="action-button">Konfirmasi</a>
                 </div>
                 
                 <div class="footer-note">
